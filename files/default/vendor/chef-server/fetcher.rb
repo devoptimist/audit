@@ -36,6 +36,12 @@ module ChefServer
       config = {
         'insecure' => true,
       }
+
+      if target.respond_to?(:key?) && target.key?(:sha256)
+        config['sha256'] = target[:sha256]
+        config['server'] = chef_server_url_base
+      end
+
       new(target_url(profile, config), config)
     rescue URI::Error => _e
       nil
@@ -75,7 +81,7 @@ module ChefServer
     # make sure we go back through the ComplianceAPI handling.
     #
     def resolved_source
-      { compliance: chef_server_url }
+      { compliance: chef_server_url, sha256: @config['sha256'] }
     end
 
     # Downloads archive to temporary file from Chef Compliance via Chef Server
@@ -119,7 +125,8 @@ module ChefServer
     private
 
     def chef_server_url
-      m = %r{^#{@config['server']}/owners/(?<owner>[^/]+)/compliance/(?<id>[^/]+)/tar$}.match(@target)
+      pre_fix = "/compliance#{URI(Chef::Config[:chef_server_url]).path}"
+      m = %r{^#{@config['server']}#{pre_fix}/owners/(?<owner>[^/]+)/compliance/(?<id>[^/]+)/tar$}.match(@target.to_s)
       "#{m[:owner]}/#{m[:id]}"
     end
   end

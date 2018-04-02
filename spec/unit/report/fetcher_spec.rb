@@ -16,33 +16,60 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 require 'spec_helper'
 require_relative '../../../files/default/vendor/chef-server/fetcher'
 
 describe ChefServer::Fetcher do
   let(:mynode) { Chef::Node.new }
   let(:myprofile) { 'compliance://foobazz' }
+  let(:profile_sha256_hash) {
+    {
+      name: 'linux-baseline',
+      compliance: 'user/linux-baseline',
+      sha256: 'xxxxxxxxxxxxxxxxxxxxxxx'
+    }
+  }
+  let(:res_source) {
+    {
+      :compliance=>"user/linux-baseline",
+      :sha256=>"xxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  }
 
-  before :each do
-    allow(Chef).to receive(:node).and_return(mynode)
-    allow(ChefServer::Fetcher).to receive(:construct_url).and_return(URI(myprofile))
-    allow(ChefServer::Fetcher).to receive(:chef_server_visibility?).and_return(true)
+  context 'when target is a string' do
+    before :each do
+      allow(Chef).to receive(:node).and_return(mynode)
+      allow(ChefServer::Fetcher).to receive(:construct_url).and_return(URI(myprofile))
+      allow(ChefServer::Fetcher).to receive(:chef_server_visibility?).and_return(true)
+    end
+
+    it 'should resolve a target' do
+      mynode.default['audit']['fetcher'] = nil
+      res = ChefServer::Fetcher.resolve(myprofile)
+      expect(res.target).to eq(URI(myprofile))
+    end
+
+    it 'should add /compliance URL prefix if needed' do
+      mynode.default['audit']['fetcher'] = 'chef-server'
+      expect(ChefServer::Fetcher.url_prefix).to eq('/compliance')
+    end
+
+    it 'should omit /compliance if not' do
+      mynode.default['audit']['fetcher'] = nil
+      expect(ChefServer::Fetcher.url_prefix).to eq('')
+    end
   end
 
-  it 'should resolve a target' do
-    mynode.default['audit']['fetcher'] = nil
-    res = ChefServer::Fetcher.resolve(myprofile)
-    expect(res.target).to eq(URI(myprofile))
-  end
+  context 'when target is a hash with a sha256 key' do
+    before :each do
+      Chef::Config[:chef_server_url] = 'http://127.0.0.1:8889/organizations/org'
+      allow(Chef).to receive(:node).and_return(mynode)
+    end
 
-  it 'should add /compliance URL prefix if needed' do
-    mynode.default['audit']['fetcher'] = 'chef-server'
-    expect(ChefServer::Fetcher.url_prefix).to eq('/compliance')
-  end
-
-  it 'should omit /compliance if not' do
-    mynode.default['audit']['fetcher'] = nil
-    expect(ChefServer::Fetcher.url_prefix).to eq('')
+    it 'returns the correct details when resolved_source is called' do
+      mynode.default['audit']['fetcher'] = 'chef-server'
+      res = ChefServer::Fetcher.resolve(profile_sha256_hash)
+      expect(res.resolved_source).to eq(res_source)
+    end
   end
 end
